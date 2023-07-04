@@ -10,3 +10,5 @@ or
 ```bash
 python3 assistant.py
 ```
+
+And then let yourself go along with Phil !

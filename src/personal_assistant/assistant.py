@@ -1,7 +1,10 @@
 import time,sys
 from rich.console import Console
 import random
+from tmdbv3api import TMDb, Movie
+from bs4 import BeautifulSoup
 import os
+from larousse_api import larousse
 from utils import get_location,fetch_weather,get_date,link
 import pickle
 from babel.dates import format_datetime
@@ -12,6 +15,7 @@ from rich.prompt import Prompt
 import psutil
 import googlesearch
 from PIL import Image
+import synonymes
 
 #from polyglot.detect import Detector
 
@@ -23,25 +27,31 @@ from utils import n_first_sentences,n_last_sentences,get_size,LeMonde
 
 class Assistant:
     def initialisation(self):
-        self.name = "Nom"
+        self.name = "Phil"
         self.console.clear()
         self.current_user = None
         self.version = "0.0.1"
         self.timeout = 5
         wikipedia.set_lang("fr")
         self.read_registered_users()
+        tmdb = TMDb()
+        tmdb.api_key = 'a5beed50b62bc4886b8da6bb2b823fa3'
+        tmdb.language = 'fr'
+        tmdb.debug = True
         self.disk_space_taken = self.get_space_used()
         self.python_version = platform.python_version()
         self.sysname, self.nodename, _, _, self.machine = os.uname()
         names = {"linux" : "Linux","win32" : "Windows","Darwin" :"macOS"}
         self.stats = {"OS" : f"{names.get(self.sysname)} on {self.machine}","Appareil" : self.nodename}
         battery_stats = self.battery_stats()
-        if battery_stats.get("power_plugged"): 
+        if battery_stats.get('power_plugged'): 
             self.description = f"{self.name} ({self.version}) sous Python {self.python_version} sur la machine {self.nodename} en charge à {battery_stats.get('percents')}% ({get_size(self.disk_space_taken,factor=1000)} occupés par le logiciel)"
         else:
             tl = battery_stats.get('time_left')
             self.description = f"{self.name} ({self.version}) sous Python {self.python_version} sur la machine {self.nodename} sur batterie ({tl[1]} {tl[0]} restante(s)) ({get_size(self.disk_space_taken,factor=1000)} occupés par le logiciel)"
         pass
+
+
 
     def load_user_data(self):
         file_name = f"./data/users/{self.hash_name(self.current_user.id)}.pkl"
@@ -55,6 +65,28 @@ class Assistant:
             self.current_user_statistics = {}
             self.dump_user_data()
             self.load_user_data()
+
+    def info_of_the_day(self):
+        url = "https://fr.wikipedia.org/wiki/"
+        r = requests.get(url)
+        response = BeautifulSoup(r.text,"html.parser")
+        self.log("Information du jour :",style = "underline")
+        self.log(response.find_all("div",{"class" : "accueil_2017_cadre"})[2].find_all("li")[1].text,with_date=False)
+
+    def show_definition(self,text : str):
+        definition = larousse.get_definitions(text)
+        if len(definition) > 0:
+            self.log("Voici la définition que j'ai trouvé :")
+            definition = definition[0].replace('1.','').replace('\t','')
+            self.log(f"{text.capitalize()}",style = "underline",backline=False)
+            self.log({definition},with_date=False,style="italic")
+        else:
+            self.log(f"Désolé, je n'ai pas trouvé de définition pour {text}.")
+
+    def find_synonyms(self,query):
+        synos = synonymes.cnrtl(query)[:3]
+        self.log(f"Comme synonymes de {query}, vous pourriez utiliser :")
+        self.show_as_list(*synos)
 
     def get_space_used(self,path = "."):
         size = 0
@@ -88,7 +120,6 @@ class Assistant:
 
         try:
             if not os.path.exists(path):
-                print("DEBUG je télécharge l'image")
                 urllib.request.urlretrieve(link,path)
             return path
         except:
@@ -115,17 +146,6 @@ class Assistant:
                 hash += 1000
         return hash
     
-    def info_of_the_day(self):
-        try:
-            page = wikipedia.page(wikipedia.random(),preload=False)
-            self.log("Information du jour : ")
-            self.log(page.title,style = "bold underline",with_date=False)
-            self.log(page.summary,with_date=False,style = "italic",speed = 0.02)
-            self.log(f"Pour plus d'informations : {link(page.references[0])}",with_date=False)
-        except:
-            pass
-
-
     def search(self,query):
         self.log("Je vais me renseigner !")
         browsing_strings = ["Recherche en cours",f"Recherche d'informations sur {query}"]
@@ -162,12 +182,12 @@ class Assistant:
                     print(f"c'est la {self.current_user_statistics.get('wikipedia_statistics').get(page.title)} fois que vous consultez cette page")
                     # ces deux fonctionnalités font un peu doublon, l'avantage de la deuxième est qu'elle s'applique à tous les utilisateurs, mais elle démultiplie un peu le nombre de fichiers
                     if os.path.exists(f"./data/info/{self.hash_name(page.title)}.pkl"):
-                        print(f"DEBUG :  je vais chercher les données dans ./data/info/{self.hash_name(page.title)}.pkl")
+                        #print(f"DEBUG :  je vais chercher les données dans ./data/info/{self.hash_name(page.title)}.pkl")
                         with open(f"./data/info/{self.hash_name(page.title)}.pkl","rb") as file:
                             info = pickle.load(file)
                         file.close()
                     else:
-                        print(f"DEBUG : j'enregistre les données dans ./data/info/{self.hash_name(page.title)}.pkl")
+                        #print(f"DEBUG : j'enregistre les données dans ./data/info/{self.hash_name(page.title)}.pkl")
                         info = (page.title,page.summary)
                         with open(f"./data/info/{self.hash_name(page.title)}.pkl","wb") as file:
                             pickle.dump(info,file)
@@ -324,6 +344,24 @@ class Assistant:
         except:
             return None
 
+    def suggest_movie(self,query):
+        movie = Movie()
+        try:
+            film = movie.search(query)[0]
+            suggestion = movie.recommendations(film.id)[0]
+            self.log(f"Si vous aimez {film.title}, je vous recommande le film suivant :")
+        except:
+            suggestion = None
+            pass
+        if not suggestion:
+            suggestion = movie.popular()[0]
+            self.log("Je n'ai trouvé aucun film en lien avec votre requête, mais je peux vous recommander le film suivant :")
+        self.log(f"{suggestion.title} : {suggestion.overview}",style="italic",with_date=False)
+
+    def show_weather(self,place):
+        weather = fetch_weather(place)
+        if weather:
+            self.log(f"Aujourd'hui à {place}, il fera {weather.get('description').lower()} pour des températures allant de {weather.get('minimal')} à {weather.get('maximal')}.")
 
     def ask(self,text,password = False,default = None) -> str:
         self.log(f"{text} ",backline=False,after_timing=False)
@@ -462,6 +500,14 @@ class Assistant:
                     what_to_do = "help"
                 case _ as q if self.contains_one_of_strings(q,"actualités","actualité"):
                     what_to_do = "news"
+                case _ as q if self.contains_one_of_strings(q,"synonyme","synonymes"):
+                    what_to_do = "syno"
+                case _ as q if self.contains_one_of_strings(q,"météo","temps","meteo","méteo"):
+                    what_to_do = "weather"
+                case _ as q if self.contains_one_of_strings(q,"definition","définition","définitions","définir"):
+                    what_to_do = "definition"
+                case _ as q if self.contains_one_of_strings(q,"suggere","suggestion","film"):
+                    what_to_do = "movie"
                 case _:
                     what_to_do = "search"
         match what_to_do:
@@ -471,6 +517,12 @@ class Assistant:
                 self.os_statistics()
             case "clear":
                 self.console.clear()
+            case "syno":
+                word = query.split(" ")[-1]
+                self.find_synonyms(word)
+            case "weather":
+                place = query.split(" ")[-1]
+                self.show_weather(place)
             case "delete profile":
                 answer = Prompt.ask(f"Voulez vous vraiment supprimer le profil {self.current_user} ?",choices = ["o","n"],console = self.console)
                 if answer == "o":
@@ -489,6 +541,12 @@ class Assistant:
                 self.search(query)
             case "help":
                 self.show_help()
+            case "movie":
+                title = query.replace("film","")
+                self.suggest_movie(title)
+            case "definition":
+                word = query.split(" ")[-1]
+                self.show_definition(word)
             case "news":
                 self.show_news()
             case "translate":
@@ -510,7 +568,9 @@ class Assistant:
 
     def show_news(self):
         lm = LeMonde()
-        news = lm.get_articles()[3:]
+        self.log(f"Voici ce que j'ai trouvé dans l'actualité")
+        news = lm.get_articles()[:3]
+        news = [f"{new.subject.capitalize()} : {new.title}" for new in news if new.subject]
         self.show_as_list(*news)
         
     def log(self,text : str,with_date = True,backline = True,after_timing = True,speed = 0.03,style = None):

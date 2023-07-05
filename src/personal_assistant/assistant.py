@@ -475,7 +475,7 @@ class Assistant:
             self.console.log(f"{found_string}!",style="bold green")
             time.sleep(0.5)
             self.console.clear()
-
+            
             # il y a des trucs a faire avec spacy ici pour mieux comprendre le sens des requêtes
             match query:
                 case _ as q if q.__contains__("hello"):

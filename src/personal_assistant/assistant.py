@@ -15,7 +15,8 @@ from rich.prompt import Prompt
 import psutil
 import googlesearch
 from PIL import Image
-import synonymes
+import synonymes,imgcat
+from rich import emoji
 
 #from polyglot.detect import Detector
 
@@ -84,7 +85,7 @@ class Assistant:
             self.log(f"Désolé, je n'ai pas trouvé de définition pour {text}.")
 
     def find_synonyms(self,query):
-        synos = synonymes.cnrtl(query)[:3]
+        synos = synonymes.linternaute(query)[:3]
         self.log(f"Comme synonymes de {query}, vous pourriez utiliser :")
         self.show_as_list(*synos)
 
@@ -102,7 +103,11 @@ class Assistant:
         pass
 
     def display_picture(self,path):
-        os.system(f"imgcat {path}")
+        try:
+            imgcat.imgcat(Image.open(path),preserve_aspect_ratio=True)
+            return True
+        except:
+            return None
 
     def get_wiki_image(self,title):
         WIKI_REQUEST = 'http://fr.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles='
@@ -117,15 +122,12 @@ class Assistant:
     def download_image(self,link,title) -> str:
         title_path = self.hash_name(title)
         path = f"./data/pictures/{title_path}.jpg"
-
         try:
-            if not os.path.exists(path):
-                urllib.request.urlretrieve(link,path)
+            urllib.request.urlretrieve(link,path)
             return path
         except:
             return None
         
-
     # a améliorer !!!!! split le texte en petits bouts
     def translate(self,text : str,from_lang,to_lang = "fr"):
         t = Translator(to_lang=to_lang,from_lang=from_lang)
@@ -205,16 +207,9 @@ class Assistant:
             picture_link = self.get_wiki_image(info[0])
             if picture_link:
                 path = self.download_image(picture_link,info[0])
-                resize_result = self.resize(path)
-                if resize_result:
-                    if path and os.path.getsize(path) > 50000:
-                        self.display_picture(path)
-                    else:
-                        os.remove(path)
-                else:
-                    os.remove(path)
-    
-                    
+                if path and os.path.getsize(path) > 50000:
+                    self.display_picture(path)
+                os.remove(path)            
             self.log(info[1],with_date = False,style = "italic",speed = 0.02)
 
         elif results and len(list(results)) > 0:
@@ -331,18 +326,6 @@ class Assistant:
         if self.location:
             self.current_user_data["last_location"] = self.location
         self.log(f"{self.current_user.id} connecté à {self.description}",with_date=False,speed = 0.02)
-    
-    def resize(self,path : str):
-        try:
-            im = Image.open(path)
-            format = im.size[1] / im.size[0]
-            new_width = 800
-            new_length = new_width * format
-            im2 = im.resize((int(new_width),int(new_length)))
-            im2.save(path)
-            return True
-        except:
-            return None
 
     def suggest_movie(self,query):
         movie = Movie()
@@ -358,10 +341,13 @@ class Assistant:
             self.log("Je n'ai trouvé aucun film en lien avec votre requête, mais je peux vous recommander le film suivant :")
         self.log(f"{suggestion.title} : {suggestion.overview}",style="italic",with_date=False)
 
-    def show_weather(self,place):
+    def show_weather(self,place : str):
         weather = fetch_weather(place)
         if weather:
-            self.log(f"Aujourd'hui à {place}, il fera {weather.get('description').lower()} pour des températures allant de {weather.get('minimal')} à {weather.get('maximal')}.")
+            self.log(f"Aujourd'hui à {place.capitalize()}, il fera {weather.get('description').lower()} pour des températures allant de {weather.get('minimal')} à {weather.get('maximal')}.")
+        else:
+            self.log(f"Je n'ai pas trouvé de météo pour votre requête, désolé.")
+
 
     def ask(self,text,password = False,default = None) -> str:
         self.log(f"{text} ",backline=False,after_timing=False)
@@ -475,7 +461,7 @@ class Assistant:
             self.console.log(f"{found_string}!",style="bold green")
             time.sleep(0.5)
             self.console.clear()
-            
+
             # il y a des trucs a faire avec spacy ici pour mieux comprendre le sens des requêtes
             match query:
                 case _ as q if q.__contains__("hello"):

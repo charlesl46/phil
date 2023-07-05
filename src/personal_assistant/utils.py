@@ -129,12 +129,12 @@ def get_location():
         return None
 
 def fetch_weather(place : str):
-    if place:
+    try:
         client = meteofrance_api.MeteoFranceClient()
         place = client.search_places(place)[0]
         forecast = client.get_forecast_for_place(place)
         return {"description" : forecast.today_forecast.get('weather12H').get("desc"),"minimal" : int(forecast.today_forecast.get('T').get("min")),"maximal" : int(forecast.today_forecast.get('T').get("max"))}
-    else:
+    except:
         return None
 
 def n_first_sentences(text : str,n):

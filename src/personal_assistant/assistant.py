@@ -463,91 +463,69 @@ class Assistant:
             # il y a des trucs a faire avec spacy ici pour mieux comprendre le sens des requêtes
             match query:
                 case _ as q if q.__contains__("hello"):
-                    what_to_do = "wake up"
+                    what_to_do = "wake_up_log"
                 case _ as q if self.contains_one_of_strings(q,"os","exploitation","système"):
-                    what_to_do = "os"
+                    what_to_do = "os_statistics"
                 case _ as q if self.contains_one_of_strings("effacer","clear"):
                     what_to_do = "clear"
                 case _ as q if self.contains_all_of_strings(q,"supprimer","profil"):
                     what_to_do = "delete profile"
                 case _ as q if self.contains_one_of_strings(q,"ram") or self.contains_all_of_strings(q,"mémoire","vive"):
-                    what_to_do = "ram"
+                    what_to_do = "ram_statistics"
                 case _ as q if self.contains_one_of_strings(q,"disque","memoire") or self.contains_all_of_strings(q,"espace","disque"):
-                    what_to_do = "disk"
+                    what_to_do = "disk_statistics"
                 case _ as q if self.contains_one_of_strings(q,"quitter","partir","éteindre","fermer"):
-                    what_to_do = "leave"
+                    what_to_do = "logout"
                 case _ as q if self.contains_one_of_strings(q,"traduire","traduction","traduit"):
                     what_to_do = "translate"
                 case _ as q if self.contains_one_of_strings(q,"photos de","photo de"):
-                    what_to_do = "photos"
+                    arg = query.replace("photos de","").replace("photo de","")
+                    what_to_do = "show_photos"
                 case _ as q if self.contains_one_of_strings(q,"aide"):
-                    what_to_do = "help"
+                    what_to_do = "show_help"
                 case _ as q if self.contains_one_of_strings(q,"actualités","actualité"):
-                    what_to_do = "news"
+                    what_to_do = "show_news"
                 case _ as q if self.contains_one_of_strings(q,"synonyme","synonymes"):
-                    what_to_do = "syno"
+                    arg = query.split(" ")[-1]
+                    what_to_do = "find_synonyms"
                 case _ as q if self.contains_one_of_strings(q,"météo","temps","meteo","méteo"):
-                    what_to_do = "weather"
+                    arg = query.split(" ")[-1]
+                    what_to_do = "show_weather"
                 case _ as q if self.contains_one_of_strings(q,"definition","définition","définitions","définir"):
-                    what_to_do = "definition"
+                    arg = query.split(" ")[-1]
+                    what_to_do = "show_definition"
                 case _ as q if self.contains_one_of_strings(q,"suggere","suggestion","film"):
-                    what_to_do = "movie"
+                    arg = query.replace("film","")
+                    what_to_do = "suggest_movie"
                 case _:
+                    arg = query
                     what_to_do = "search"
-        match what_to_do:
-            case "wake up":
-                self.wake_up_log()
-            case "os":
-                self.os_statistics()
-            case "clear":
-                self.console.clear()
-            case "syno":
-                word = query.split(" ")[-1]
-                self.find_synonyms(word)
-            case "weather":
-                place = query.split(" ")[-1]
-                self.show_weather(place)
-            case "delete profile":
-                answer = Prompt.ask(f"Voulez vous vraiment supprimer le profil {self.current_user} ?",choices = ["o","n"],console = self.console)
-                if answer == "o":
-                    self.delete_profile()
-                    self.logout()
-            case "photos":
-                query = query.replace("photos de","").replace("photo de","")
-                self.show_photos(query)
-            case "ram":
-                self.ram_statistics()
-            case "disk":
-                self.disk_statistics()
-            case "leave":
-                self.logout()
-            case "search":
-                self.search(query)
-            case "help":
-                self.show_help()
-            case "movie":
-                title = query.replace("film","")
-                self.suggest_movie(title)
-            case "definition":
-                word = query.split(" ")[-1]
-                self.show_definition(word)
-            case "news":
-                self.show_news()
-            case "translate":
-                text_to_translate = query.split("...")[1]
-                languages = {"français" : "fr","anglais" : "en","espagnol" : "es","italien" : "it","allemand" : "de"}
-                languages_reversed = {value : key for (key,value) in languages.items()}
-                words = query.split(" ")
-                lang_to = languages.get(words[-1])
-                if lang_to is None: lang_to = "fr"
-                lang_from = languages.get(words[-3])
 
-                translation = self.translate(text_to_translate,from_lang=lang_from,to_lang=lang_to)
-                if translation:
-                    self.log(f"Voici la traduction en {languages_reversed[lang_to]} de votre texte en {languages_reversed[lang_from]}")
-                    self.log(f"\"{translation}\"",style = "italic",with_date=False)
-                else:
-                    self.log("Désolé, je ne suis actuellement pas en mesure d'effectuer cette traduction.")
+        if what_to_do == "translate":
+            text_to_translate = query.split("...")[1]
+            languages = {"français" : "fr","anglais" : "en","espagnol" : "es","italien" : "it","allemand" : "de"}
+            languages_reversed = {value : key for (key,value) in languages.items()}
+            words = query.split(" ")
+            lang_to = languages.get(words[-1])
+            if lang_to is None: lang_to = "fr"
+            lang_from = languages.get(words[-3])
+
+            translation = self.translate(text_to_translate,from_lang=lang_from,to_lang=lang_to)
+            if translation:
+                self.log(f"Voici la traduction en {languages_reversed[lang_to]} de votre texte en {languages_reversed[lang_from]}")
+                self.log(f"\"{translation}\"",style = "italic",with_date=False)
+            else:
+                self.log("Désolé, je ne suis actuellement pas en mesure d'effectuer cette traduction.")
+        if what_to_do == "delete profile":
+            answer = Prompt.ask(f"Voulez vous vraiment supprimer le profil {self.current_user} ?",choices = ["o","n"],console = self.console)
+            if answer == "o":
+                self.delete_profile()
+                self.logout()
+        else :
+            func = getattr(self, what_to_do)
+            if 'arg' in locals():
+                func(arg)
+            else: func()
     pass        
 
     def show_news(self):

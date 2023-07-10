@@ -18,8 +18,6 @@ from PIL import Image
 import synonymes,imgcat
 from rich import emoji
 
-#from polyglot.detect import Detector
-
 import wikipedia
 import requests,json,urllib
 from translate import Translator

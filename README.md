@@ -1,3 +1,5 @@
+<p align="center"><img align="center" width="280" src="./.github/phil.png"/><p>
+
 # phil
 A python virtual assistant named "Phil"
 

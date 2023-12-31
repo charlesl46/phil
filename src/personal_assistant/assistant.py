@@ -44,7 +44,7 @@ class Assistant:
         self.stats = {"OS" : f"{names.get(self.sysname)} on {self.machine}","Appareil" : self.nodename}
         battery_stats = self.battery_stats()
         if battery_stats.get('power_plugged'): 
-            self.description = f"{self.name} ({self.version}) sous Python {self.python_version} sur la machine {self.nodename} en charge à {battery_stats.get('percents')}% ({get_size(self.disk_space_taken,factor=1000)} occupés par le logiciel)"
+            self.description = f"{self.name} ({self.version}) sous Python {self.python_version} sur la machine {self.nodename} en charge ({get_size(self.disk_space_taken,factor=1000)} occupés par le logiciel)"
         else:
             tl = battery_stats.get('time_left')
             self.description = f"{self.name} ({self.version}) sous Python {self.python_version} sur la machine {self.nodename} sur batterie ({tl[1]} {tl[0]} restante(s)) ({get_size(self.disk_space_taken,factor=1000)} occupés par le logiciel)"
@@ -460,7 +460,6 @@ class Assistant:
             time.sleep(0.5)
             self.console.clear()
 
-            # il y a des trucs a faire avec spacy ici pour mieux comprendre le sens des requêtes
             match query:
                 case _ as q if q.__contains__("hello"):
                     what_to_do = "wake_up_log"
@@ -561,8 +560,8 @@ class Assistant:
         try:
             # pour aller plus vite 
             self.wake_up_log()
-            #self.user_profile_selection()
-            self.set_current_user(self.registered_users["admin"])
+            self.user_profile_selection()
+            #self.set_current_user(self.registered_users["admin"])
             self.info_of_the_day()
             self.welcome_view()
 

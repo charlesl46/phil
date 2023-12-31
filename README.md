@@ -6,17 +6,25 @@
 </a>
 </p>
 
-# phil
-A python virtual assistant named "Phil"
+# The project
+A python virtual assistant named <kbd>phil</kbd>
 
-## How to use it
-Lauch it :
-```bash
+# 💻 Usage
+Lauch it using :
+```sh
 python assistant.py
-```
-or
-```bash
-python3 assistant.py
 ```
 
 And then let yourself go along with Phil !
+
+# 🔥 Features
+
+- initialization and user profile handling
+- weather and location
+- search and information retrieval (Google, Wikipedia)
+- translation
+- system and machine statistics
+- user interaction, logging
+- news articles
+- movie suggestion
+- display pictures

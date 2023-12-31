@@ -1,4 +1,5 @@
 <p align="center"><img align="center" width="500" src="./.github/phil.png#gh-dark-mode-only"/><p>
+<p align="center"><img align="center" width="500" src="./.github/phil-dark.png#gh-light-mode-only"/><p>
 
 # phil
 A python virtual assistant named "Phil"

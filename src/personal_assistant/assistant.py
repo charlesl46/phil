@@ -4,25 +4,24 @@ import random
 from tmdbv3api import TMDb, Movie
 from bs4 import BeautifulSoup
 import os
+from hashlib import sha256
 from larousse_api import larousse
 from utils import get_location,fetch_weather,get_date,link
 import pickle
 from babel.dates import format_datetime
-import spacy
 import platform
-from user import User
 from rich.prompt import Prompt
 import psutil
 import googlesearch
 from PIL import Image
 import synonymes,imgcat
-from rich import emoji
-
 import wikipedia
 import requests,json,urllib
 from translate import Translator
 from utils import n_first_sentences,n_last_sentences,get_size,LeMonde
+from peewee import SqliteDatabase,Model,CharField,IntegerField,PrimaryKeyField
 
+LOG = False
 
 class Assistant:
     def initialisation(self):
@@ -32,7 +31,7 @@ class Assistant:
         self.version = "0.0.1"
         self.timeout = 5
         wikipedia.set_lang("fr")
-        self.read_registered_users()
+        self.User_model = self.load_db()
         tmdb = TMDb()
         tmdb.api_key = 'a5beed50b62bc4886b8da6bb2b823fa3'
         tmdb.language = 'fr'
@@ -50,20 +49,25 @@ class Assistant:
             self.description = f"{self.name} ({self.version}) sous Python {self.python_version} sur la machine {self.nodename} sur batterie ({tl[1]} {tl[0]} restante(s)) ({get_size(self.disk_space_taken,factor=1000)} occupés par le logiciel)"
         pass
 
+    def load_db(self):
+        self.db = SqliteDatabase('./data/database.db')
 
+        class User(Model):
+            id = PrimaryKeyField()
+            name = CharField()
+            username = CharField()
+            password = CharField()
+            last_location = CharField()
+            last_weather = CharField()
 
-    def load_user_data(self):
-        file_name = f"./data/users/{self.hash_name(self.current_user.id)}.pkl"
-        if os.path.exists(file_name):
-            with open(file_name,"rb") as file:
-                self.current_user_data = pickle.load(file)
-                self.current_user_statistics = pickle.load(file)
-            file.close()
-        else:
-            self.current_user_data = {}
-            self.current_user_statistics = {}
-            self.dump_user_data()
-            self.load_user_data()
+            class Meta:
+                database = self.db
+
+        self.db.connect()
+        self.db.create_tables([User])
+
+        return User
+
 
     def info_of_the_day(self):
         url = "https://fr.wikipedia.org/wiki/"
@@ -225,20 +229,8 @@ class Assistant:
             self.log(f"Désolé, je ne parviens pas à trouver de résultats pour {query}.")
 
     def read_registered_users(self) -> None:
-        name = "./data/users/user_data.pkl"
-        if "user_data.pkl" in os.listdir("./data/users"): 
-            with open(name,"rb") as file:
-                try:
-                    self.registered_users = pickle.load(file)
-                except:
-                    file.close()
-                    superuser = User("admin","admin","Lucas")
-                    reg_users = {superuser.id : superuser}
-                    with open(name,"wb") as file:
-                        pickle.dump(reg_users,file)
-                    file.close()
-        else:
-            raise FileNotFoundError("The users profiles file is missing.")
+        registered_users = self.User_model.select()
+        return registered_users
 
     #def find_subjects(self,text):
         #doc = self.nlp(text)
@@ -246,10 +238,10 @@ class Assistant:
 
     def welcome_view(self):
         date,time = get_date()
-        if self.weather or (self.current_user_data.get("last_location") and self.current_user_data.get("last_weather")):
+        if self.weather or (self.current_user.last_weather and self.current_user.last_location):
             if not self.weather:
-                self.weather = self.current_user_data.get("last_weather")
-                self.location = self.current_user_data.get("last_location")
+                self.weather = self.current_user.last_weather
+                self.location = self.current_user.last_location
             self.log(f"Nous sommes le {date} et aujourd'hui le temps sera {self.weather.get('description').lower()} avec des températures allant de {self.weather.get('minimal')} à {self.weather.get('maximal')} degrés à {self.location}.")                
         else:
             self.log(f"Nous sommes le {date}.")
@@ -258,21 +250,11 @@ class Assistant:
         id = self.ask("Entrez un identifiant (4 caractères minimum, tous caractères alphanumériques autorisés)")
         password = self.ask("Entrez un mot de passe (4 caractères minimum)",password = True)
         name = self.ask("Enfin, entrez le nom par lequel je serai amené à vous appeler")
-        user = User(id,password,name)
-        self.update_registered_users(user)
+        user = self.User_model.create(username=id,password=sha256(password.encode()).hexdigest(),name=name)
         return user
-    
-    def update_registered_users(self,new_user):
-        self.registered_users[new_user.id] = new_user
-        with open("./data/users/user_data.pkl","wb") as file:
-            pickle.dump(self.registered_users,file)
-        file.close()
 
     def ram_statistics(self):
-
-        # il faudrait réfléchir à les afficher dans un tableau rich
         svmem = psutil.virtual_memory()
-
         memory_stats = []
         memory_stats.append(f"Mémoire totale: {get_size(svmem.total)}")
         memory_stats.append(f"Disponible : {get_size(svmem.available)}")
@@ -293,7 +275,6 @@ class Assistant:
             return {"power_plugged" : power_plugged,"percents_left" : battery.percent,"time_left" : ("heure(s)",hours_left)}
         else:
             return {"power_plugged" : power_plugged,"percents_left" : battery.percent,"time_left" : ("minute(s)",minutes_left)}
-
 
     def disk_statistics(self):
         disk_stats = []
@@ -316,14 +297,9 @@ class Assistant:
         
         self.show_as_list(*disk_stats)
 
-    def set_current_user(self,user : User) -> None:
+    def set_current_user(self,user) -> None:
         self.current_user = user
-        self.load_user_data()
-        if self.weather:
-            self.current_user_data["last_weather"] = self.weather
-        if self.location:
-            self.current_user_data["last_location"] = self.location
-        self.log(f"{self.current_user.id} connecté à {self.description}",with_date=False,speed = 0.02)
+        self.log(f"{self.current_user.username} connecté à {self.description}",with_date=False,speed = 0.02)
 
     def suggest_movie(self,query):
         movie = Movie()
@@ -352,7 +328,7 @@ class Assistant:
         return Prompt.ask("",password=password,console=self.console,default = default)
 
     def user_profile_selection(self):
-        if len(self.registered_users) == 0:
+        if self.read_registered_users().count() == 0:
             self.log("Aucun utilisateur n'est enregistré, souhaitez vous créer un profil ? (o/n)")
             answer = input()
             if answer.lower() == "o":
@@ -373,7 +349,7 @@ class Assistant:
                     ok = False
                     while not ok:
                         password = self.ask("Mot de passe",password=True)
-                        if password == self.registered_users[id].password:
+                        if sha256(password).hexdigest() == self.registered_users[id].password:
                             with self.console.status("Identification en cours..."):
                                 time.sleep(0.5)
                             self.console.log("Identification réussie",style="bold green")
@@ -424,7 +400,7 @@ class Assistant:
         return True
     
     def show_registered_users(self):
-        self.show_as_list(*list(self.registered_users.values()))
+        self.show_as_list(*list([user.username for user in self.read_registered_users()]))
 
     def delete_profile(self,id):
         user = self.registered_users[id]
@@ -535,26 +511,29 @@ class Assistant:
         self.show_as_list(*news)
         
     def log(self,text : str,with_date = True,backline = True,after_timing = True,speed = 0.03,style = None):
-        try:
-            date,time_value = get_date()
-            if with_date:
-                if self.current_user is not None:
-                    self.console.print(f"{time_value} ([i]{self.current_user.id}[/i] connecté) ",end="",style = "dim")
-                else:
-                    self.console.print(f"{time_value} ",end="",style = "dim")
-            for letter in str(text):
-                self.console.print(letter,end = "",style = style)
-                sys.stdout.flush()
-                time.sleep(speed)
-            
-            if backline:
-                print("\n")
-            
-            if after_timing: 
-                time.sleep(0.2)
-        except KeyboardInterrupt:
-            print("\n\n")
-            pass
+        if LOG:
+            try:
+                date,time_value = get_date()
+                if with_date:
+                    if self.current_user is not None:
+                        self.console.print(f"{time_value} ([i]{self.current_user.id}[/i] connecté) ",end="",style = "dim")
+                    else:
+                        self.console.print(f"{time_value} ",end="",style = "dim")
+                for letter in str(text):
+                    self.console.print(letter,end = "",style = style)
+                    sys.stdout.flush()
+                    time.sleep(speed)
+                
+                if backline:
+                    print("\n")
+                
+                if after_timing: 
+                    time.sleep(0.2)
+            except KeyboardInterrupt:
+                print("\n\n")
+                pass
+        else:
+            self.console.print(text)
 
     def run(self):
         try:
